@@ -1,0 +1,45 @@
+# This workflow is the entry point for all CI processes.
+# It is from here that all other workflows are launched.
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+      - .editorconfig
+      - .gitignore
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - .editorconfig
+      - .gitignore
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  lint:
+    uses: ./.github/workflows/lint.yml
+  typechecking:
+    uses: ./.github/workflows/typechecking.yml
+  tests:
+    uses: ./.github/workflows/tests.yml
+
+  generate_version:
+    if: github.event_name == 'push' && github.ref == 'main'
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate version
+        uses: ./.github/actions/
+        id: version
+
+  draft_release:
+    needs: [ typechecking, tests, generate_version ]
+    uses: ./.github/workflows/release.yml
+    with:
+      version: ${{ needs.generate_version.outputs.version }}
+

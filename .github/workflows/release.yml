@@ -1,0 +1,82 @@
+name: Release
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        required: true
+        type: string
+        description: Semantic version of new release. Without `v` prefix.
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+
+defaults:
+  run:
+    shell: 'bash'
+
+
+jobs:
+  upload_artifacts:
+
+    strategy:
+      matrix:
+        os: [ windows-latest ]
+    #    To compile the application for different platforms, use:
+    #    os: [ macos-latest, ubuntu-latest, windows-latest ]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 16 # Need for npm >=7.7
+          cache: 'npm'
+
+      - run: npm ci
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+
+      # Compile app and upload artifacts
+      - name: Compile & release Electron app
+        uses: samuelmeuli/action-electron-builder@v1
+        env:
+          VITE_APP_VERSION: ${{ inputs.version }}
+        with:
+          build_script_name: build # npm run build
+          args: --config .electron-builder.config.js
+
+          # GitHub token, automatically provided to the action
+          # (No need to define this secret in the repo settings)
+          github_token: ${{ secrets.github_token }}
+
+          # If the commit is tagged with a version (e.g. "v1.0.0"),
+          # release the app after building
+          release: true
+
+          # Sometimes the build may fail due to a connection problem with Apple, GitHub, etc. servers.
+          # This option will restart the build as many attempts as possible
+          max_attempts: 3
+
+
+          # Code Signing params
+
+          # Base64-encoded code signing certificate for Windows
+          # windows_certs: ''
+
+          # Password for decrypting `windows_certs`
+          # windows_certs_password: ''
+
+          # Base64-encoded code signing certificate for macOS
+          # mac_certs: ''
+
+          # Password for decrypting `mac_certs`
+          # mac_certs_password: ''
